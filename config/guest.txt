@@ -1,0 +1,15 @@
+# SDK functions of SLPS_258.87 kept as the game's own (guest) code although the analyzer or
+# Ghidra binds them to a runtime handler (tools/make_config.py drops them from the stubs and
+# keeps them as named entry points). Use it when a runtime stub only covers part of a library
+# and the game's own copy can talk to the real IOP module instead. One "name@address" per
+# line, exactly as the binding source names it; say why next to each.
+
+# libsdr, the EE side of the sound remote: the runtime's sceSdRemote stub keeps only transfer
+# bookkeeping and drops the effects setup (SetEffectAttr, SetCoreAttr effects on, SetSwitch,
+# EVOL, MVOL); SRWZ loads sdrdrv on the IOP, so its own libsdr can send those RPCs to the real
+# driver (and the movie's BlockTrans PCM plays through the SPU2 model's AutoDMA). Needs PS2Recomp
+# srwz-sdremote (merged) and srwz-sndhang (RPC server priority; the 2-in-7 demo freeze); after a change
+# regenerate (make_config, ps2_recomp, build).
+sceSdRemoteInit@0x00127530
+sceSdTransToIOP@0x001275e0
+sceSdRemote@0x00127688

@@ -1,0 +1,4 @@
+# Keep LF everywhere: a CRLF shebang breaks the pre-commit hook under Git for Windows.
+* text=auto eol=lf
+# cmd.exe wants CRLF batch files.
+*.bat text eol=crlf

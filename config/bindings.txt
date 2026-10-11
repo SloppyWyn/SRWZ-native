@@ -1,0 +1,19 @@
+# Manual runtime bindings for SLPS_258.87, added on top of the analyzer's SDK matches
+# (tools/make_config.py reads this file). One "name@address" per line; the name must be
+# a runtime handler in PS2Recomp's ps2_call_list.h. Say why next to each.
+
+# The analyzer found the internal _sceSifLoadModuleBuffer (0x123bb0) but not the public
+# wrapper the game calls (module loader 0x140d30 -> 0x124180 -> 0x123bb0).
+sceSifLoadModuleBuffer@0x00124180
+# sceSifFreeIopHeap (0x123688) is a wrapper of sceSifFreeSysMemory (0x123610), both unmatched;
+# they sit between sceSifAllocSysMemory (0x123590) and sceSifLoadIopHeap (0x1236a8).
+sceSifFreeIopHeap@0x00123688
+sceSifFreeSysMemory@0x00123610
+
+# The analyzer bound newlib's _malloc_r/_free_r/_calloc_r to the runtime's allocator but
+# left two functions that edit newlib's block headers as guest code. Mixed with the
+# runtime's allocator they free the block they just got (memalign trims the "spare"
+# ends), so the next allocation overlaps a live buffer (seen: MODULE.BN decompressed
+# over its own input). 0x19d058 was misnamed "setlocale" by the analyzer.
+memalign@0x0019d058
+realloc_r@0x0019fb28

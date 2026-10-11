@@ -1,0 +1,4 @@
+[submodule "third_party/PS2Recomp"]
+	path = third_party/PS2Recomp
+	url = https://github.com/SloppyWyn/PS2Recomp.git
+	branch = srwz

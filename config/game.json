@@ -1,0 +1,114 @@
+{
+  "name": "Super Robot Taisen Z",
+  "serial": "SLPS-25887",
+  "regressScenes": ["s01_dialogue_window", "s01_map_menu", "s01_battle_prep", "s01_first_battle_anim"],
+  "comment": "Per-game config for the investigation tools (tools\\wall.ps1, run-game.ps1, run-report.ps1). Paths are relative to the MAIN checkout. Checkpoint ticks are guest VBlank counts (~60/s) in OUR port, not PCSX2 frames. Boot timing drifts by up to ~600 ticks between runs (run43/wallrun2 vs wallrun1/wallcal1, same build), so dump windows are wide and the reference comparison picks the best frame.",
+  "paths": {
+    "elf": "local/game/SLPS_258.87",
+    "disc": "disc/srwz.iso",
+    "workdir": "local/game",
+    "runner": "third_party/PS2Recomp/out/build/ps2xRuntime/Release/ps2EntryRunner.exe",
+    "recompiler": "third_party/PS2Recomp/out/build/ps2xRecomp/Release/ps2_recomp.exe",
+    "recompToml": "local/recomp/srwz.toml",
+    "recompOutput": "local/recomp/output",
+    "runs": "local/runs",
+    "reference": "local/reference",
+    "baseline": "local/runs/baseline",
+    "snapshots": "local/snapshots"
+  },
+  "build": {
+    "comment": "{root} = main checkout, {key} = paths.<key>. 'recomp' steps run with -Recomp, 'build' steps with -Build; 'clean' is deleted first. build-game.bat holds the shared build lock.",
+    "steps": [
+      { "name": "recompile", "stage": "recomp", "clean": "{recompOutput}", "cmd": ["{recompiler}", "{recompToml}"] },
+      { "name": "overlays", "stage": "recomp", "cmd": ["python", "{root}/tools/overlays.py"] },
+      { "name": "runner", "stage": "build", "cmd": ["cmd.exe", "/c", "{root}\\tools\\build-game.bat", "Release"] }
+    ]
+  },
+  "runner": {
+    "ticksPerSecond": 60,
+    "bootSeconds": 10,
+    "tailSeconds": 5,
+    "maxRealtimeSeconds": 120,
+    "timeLimitFactor": 3,
+    "env": { "PS2X_MUTE": "1" },
+    "features": {
+      "fastforward": { "env": "PS2X_FASTFORWARD", "support": "auto", "value": "4", "assumedRate": 4, "comment": "A fixed factor, not max: at max busy host time is charged at the busy scale, VBlank counts run ahead of the content (SRWZ title at VBlank 32k-46k instead of ~27k) and the tick-based dump windows miss their checkpoint." },
+      "snapshot": { "env": "PS2X_SNAPSHOT_LOAD", "support": "auto" }
+    }
+  },
+  "pad": {
+    "comment": "Pad macros and routes for tools/route.py (-Route on long-run.ps1 / wall.ps1, --route on fpsrun.py; checkpoints may name a route). Steps: BUTTON[|BUTTON][+hold], 'wait N' (ticks after the previous press), 'at N' (absolute VBlank tick), <macro/route>, <step>*N. Presses with no wait between them are 'gap' ticks apart. More routes as files: config/routes/<name>.txt, one step per line, '#' comments ('# unverified' marks one). Buttons: o = CIRCLE confirms, x = CROSS goes back (SELECT SCENARIO header).",
+    "hold": 8,
+    "gap": 60,
+    "macros": {
+      "skip_movie": { "steps": ["at 3000", "START"], "notes": "START at 3000 skips the opening movie straight to the title menu (START/LOAD/CONTINUE/LIBRARY at 3060; t2padon). Earliest tried; the movie starts ~2820-3060." },
+      "title_start": { "steps": ["START"], "notes": "START on the title menu (cursor on START): SELECT SCENARIO ~140 ticks later." },
+      "confirm": { "steps": ["CIRCLE"], "notes": "o: decide" },
+      "back": { "steps": ["CROSS"], "notes": "x: back" },
+      "next_line": { "steps": ["wait 400", "CIRCLE"], "notes": "o 400 ticks after the previous press: advances a text crawl or one dialogue line (a line prints in well under 400 ticks at 1x)" }
+    },
+    "routes": {
+      "title_menu": { "steps": ["skip_movie"], "verified": "t2padon", "reaches": "title menu START/LOAD/CONTINUE/LIBRARY from ~3060" },
+      "select_scenario": { "steps": ["skip_movie", "wait 400", "title_start"], "verified": "t2padon (3000:START+8,3400:START+8; sheet local/runs/t2padonsheet.png)", "reaches": "SELECT SCENARIO from ~3541 (t2padon) to ~3900 (routenew1/2: boot drift), cursor on main scenario" },
+      "new_game": { "steps": ["select_scenario", "wait 900", "confirm"], "verified": "routenew2 (input only)", "reaches": "main scenario (first entry, already selected): CIRCLE is taken, the menu fades to white (4380-4441), then the port hangs on a flat grey screen (no GIF/DMA after, guest at pc 0x140508; sheet local/runs/routenew2sheet.png). The CIRCLE at 3700 (routenew1) fell into the menu fade-in and was lost: hence wait 900." },
+      "scenario1": { "steps": ["select_scenario", "at 4300", "confirm", "at 4900", "confirm", "at 5300", "DOWN+6", "DOWN+6", "DOWN+6", "at 5520", "confirm", "at 5700", "confirm", "at 8000", "confirm", "next_line*30"], "verified": "routes3 (bin-routes = main a5baa9c / srwz 64b4202; sheet local/runs/routes3sheet.png: protagonist select 4800, profile 5100, question 5700, crawl 6300-9900, world map unpresented 10200-11100, Breaker/Mel/Rand dialogue 11400-17700)", "notes": "Fast-forward 1 only (FF4 breaks name entry and the sprite interpreter, Walls 13a/16). Ticks from the Wall 16 runs (w16m5, local/runs/w16-notes.md). Keep the CIRCLEs from 8000: routes1 (CIRCLEs only from 10800) was still on the crawl backdrop at 16200.", "reaches": "main scenario -> protagonist select (4300 CIRCLE: Rand) -> profile (4900 CIRCLE) -> DOWN x3 to the confirm item, CIRCLE -> 'start the game?' question (5700 CIRCLE: yes) -> prologue text crawl (~6300-10500) -> world map (not presented in our port, 3D) -> scenario 1 dialogue in the domed town (Breaker/Mel, then Rand) from ~10500-11400 (boot drift), the same CIRCLEs advancing it ~20 lines. routes3: from ~18000 Rand's line \"Aan?\" no longer advances (CIRCLEs to 20000 ignored, pc 0x36b668 in FUN_0036b330 at the end: the Wall 16 sprite-interpreter loop, no missing target)." },
+      "scenario1_next": { "steps": ["scenario1", "next_line*110"], "verified": "[verified: snapnext1-4, FF1, chained snapshots s1_19000 -> s2_36000 -> s3_56005 -> s4; not yet one continuous run] CIRCLEs every 400 ticks through ~64000", "notes": "Continues scenario1 (its CIRCLEs end at 20000): rest of the Zora bazaar dialogue (Garrod, Gelba, Mel, Rand) to ~48800, then a battle-animation scene ~49400-69000 (status panel drawn blank), then the stg map from ~70000 (Gunleon on a red/black pulsing overlay, no HUD). Snapshots in local/runs/snapnext/ (s4_72001 = on the map). Runner: bin-soak copy of main 46dd575.", "reaches": "battle map from ~70000 (wrong graphics, see PROGRESS)" },
+      "guidance_map": { "steps": ["select_scenario", "at 4300", "DOWN+6", "at 4380", "confirm", "at 5000", "confirm", "at 5300", "confirm", "at 5600", "R1|START+12"], "verified": "routeg1 (bin-routes = main a5baa9c / srwz 64b4202; sheet local/runs/routeg1sheet.png: briefing room 5400-5700, black map with Mel map dialogue 8700-10207)", "notes": "Fast-forward 1 only. Ticks from the Wall 16 runs (final_guide_*, local/runs/w16-notes.md). R1|START skips the guidance demo (the game says so itself).", "reaches": "guidance scenario: briefing room dialogue (Denzel) ~4540-5600, R1|START skip -> stg_501 battle map with its map dialogue (small window + portrait). The map terrain itself is black (VU1, Wall 17)." }
+    }
+  },
+  "checkpoints": {
+    "bandai": {
+      "tick": 1000,
+      "dump": { "from": 600, "to": 1600, "every": 60 },
+      "reference": "smoke/pcsx2_10s.png",
+      "snapshot": null,
+      "notes": "BANDAI NAMCO Games logo on white (wallcal1: 1200-1500, fading out ~1380-1560; older runs never showed it in their dump windows)."
+    },
+    "logo": {
+      "tick": 1700,
+      "dump": { "from": 1100, "to": 2300, "every": 60 },
+      "reference": "movie-rt/pcsx2_15s.png",
+      "snapshot": null,
+      "notes": "BANPRESTO logo on white, then a fade to black (run43: 1200-1500; wallcal1: 1620-2220) (PCSX2 at 15 s is a grey phase of a fade)."
+    },
+    "copyright": {
+      "tick": 2300,
+      "dump": { "from": 1600, "to": 3000, "every": 60 },
+      "reference": null,
+      "snapshot": null,
+      "notes": "Copyright screen (Sunrise etc.; run43: 1530-1920, wallcal1: 2280-2940); no PCSX2 shot yet (black by 20 s there)."
+    },
+    "movie": {
+      "tick": 3600,
+      "dump": { "from": 3000, "to": 4200, "every": 60 },
+      "reference": "movie-rt/pcsx2_30s.png",
+      "snapshot": null,
+      "notes": "Opening movie OPPRG.PSS ~10 s in (run43 shows the movie at 2820; wallcal1 was still black at 3060). Movie frames move fast: a weak match is normal."
+    },
+    "select_scenario": {
+      "tick": 3600,
+      "route": "select_scenario",
+      "dump": { "from": 3000, "to": 4200, "every": 60 },
+      "reference": null,
+      "snapshot": null,
+      "notes": "SELECT SCENARIO menu reached by the select_scenario route (t2padon: title menu 3060-3480, SELECT SCENARIO fading in at 3541, steady from 3600)."
+    },
+    "scenario1": {
+      "tick": 13500,
+      "route": "scenario1",
+      "fastForward": "1",
+      "dump": { "from": 11400, "to": 17400, "every": 300 },
+      "reference": null,
+      "snapshot": null,
+      "baseline": "local/runs/baseline-scenario1",
+      "notes": "Scenario 1 dialogue in the domed town (Breaker/Mel/Rand portraits, text box) reached by the scenario1 route at 1x (routes3: dialogue 11400-17700; boot drift moves it by up to ~3000 ticks: routes2 was still on the world map at 14400). Baseline: all routes3 dumps (4200-24000), scored by content order."
+    },
+    "title": {
+      "tick": 27250,
+      "dump": { "from": 26800, "to": 28400, "every": 100 },
+      "reference": "title-press-any-button.jpg",
+      "snapshot": { "file": "title.p2xs", "tick": 26000 },
+      "notes": "Title logo + PRESS ANY BUTTON (Wall 10; run40 saw it from ~27,250, newer builds may be ~600 ticks later). ~8 min at real time: needs fast-forward or a snapshot."
+    }
+  }
+}

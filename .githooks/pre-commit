@@ -1,0 +1,26 @@
+#!/bin/sh
+# Refuses commits that would carry game data, a BIOS or the emulator, even when
+# someone forces them past .gitignore (git add -f).
+bad=0
+while IFS= read -r f; do
+  [ -n "$f" ] || continue
+  case "$f" in
+    PCSX2/*|bios/*|disc/*|local/*)
+      echo "pre-commit: $f is private (disc, BIOS or emulator)"; bad=1; continue ;;
+  esac
+  lower=$(printf '%s' "$f" | tr 'A-Z' 'a-z')
+  case "$lower" in
+    *.iso|*.chd|*.cue|*.bin|*.elf|*.irx|*.img|*.mdf|*.nrg|*.cso|*.zso|*slps_*|*scph*|*.ps2|*.mcd|*.p2s|*.snap|*.rgba|*.dmp|*.gs|*.wav|*.png|*.jpg|*.jpeg|*.bmp|*gsdump_*|*ps2x_group_*|*register_functions.cpp|*/ov_*.cpp|mc0/*|mc1/*)
+      echo "pre-commit: $f looks like game or BIOS data"; bad=1; continue ;;
+  esac
+  size=$(git cat-file -s ":$f" 2>/dev/null || echo 0)
+  if [ "$size" -gt 5242880 ]; then
+    echo "pre-commit: $f is $size bytes (over 5 MB)"; bad=1
+  fi
+done <<LIST
+$(git diff --cached --name-only --diff-filter=ACMR)
+LIST
+if [ $bad -ne 0 ]; then
+  echo "Commit refused: the disc, the BIOS, PCSX2 and anything taken from the game stay out of git."
+  exit 1
+fi

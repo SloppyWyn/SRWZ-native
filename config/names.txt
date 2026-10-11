@@ -1,0 +1,44 @@
+# Display names for guest functions of SLPS_258.87 (main program), merged by
+# tools/make_config.py into the toml's `entry_points`. Names only: every address here must be
+# a function start in the Ghidra map, where ps2_recomp uses an entry_points name solely for
+# the guest name table (register_functions.cpp: logs, watchdog, crash reports); codegen and
+# bindings are unchanged. make_config refuses an address that is not a Ghidra function start
+# or that is bound to a runtime handler. A name here replaces the analyzer's name at the same
+# address. One "name@address" per line, C-identifier names; say where it comes from and how
+# it was checked.
+#
+# Source: retro-trans/SRW-Z (MIT, https://github.com/retro-trans/SRW-Z, commit d766bc7,
+# docs/LZ_FORMAT.md, docs/RENDERER.md, docs/TECHNICAL.md, docs/VWF.md). Each one checked
+# 2026-10-07 against our ELF by decompiling the body (tools\decomp.ps1) and matching callers,
+# constants and loop shape with their description; rejected claims are in docs/GAME-FORMATS.md.
+
+# Scenario
+Scenario_execCommand@0x001e5f20      # their "scenario interpreter": branches on the command's first byte ('R','8','0','H',':',';','?',...), one caller (0x1eb530)
+
+# LZ (the format of tools/banlz.py)
+Lz_decodeRecord@0x001c6c40           # their "header parser": varints total/flags, optional skip (window/0x21/0x40 test), reserved, then 0x1c6d70; 24 callers (font init, loaders)
+Lz_decompress@0x001c6d70             # their "core decompressor": group token (lit=T&15, nref=T>>4, 0 = varint), literals, refs with varint distance, len+1, clamp to total
+
+# Message window and name macros ($n/$F/$N)
+MessageWindow_setText@0x0020c9b0     # NULL -> obj+0xc = 0; else NameMacro_instance() ? NameMacro_expand(..., obj+0xc, text) : strcpy(obj+0xc, text)
+MessageWindow_drawText@0x0020c930    # if obj+4 bit 0 and renderer obj+8: vcall +8 (renderer, obj+0xc text, arg, -1, -1), vcall +0x10; their render chain
+NameMacro_instance@0x00200f80        # their "NEEDEXP": singleton 0x5a3f80, new(0x480), vtable 0x447848, 14 entries of 0x52 bytes cleared
+NameMacro_expand@0x002011d0          # their "EXPAND": strcpy, NameMacro_substitute(table+4), returns strlen; callers 0x20c9b0, 0x1d8d80
+NameMacro_substitute@0x00201590      # their name-token expander: 2-byte token match against 14 entries (stride 0x52), copies the name at entry+0x29
+Sjis_charState@0x002010b0            # their SJIS lead-byte classifier: state 0/1 (lead 0x81-0x9f,0xe0-0xfc)/2 (trail) at index n; callers 0x201590, 0x2229d0
+
+# Text layout and drawing
+TextBox_drawText@0x00209420          # copies the box style to 0x5a4120/0x5a4140, optional callback, then Text_layoutLines; their render chain
+Text_layoutLines@0x002212b0          # their layout routine: width flag gp-0x7e8c = 0x40/0x80 from the first byte (< 0x80), lines via Text_getLine, draws via Text_drawSegment
+Text_getLine@0x00221030              # their "word splitter": offset/length of the n-th piece delimited by the gp-0x7e9c char (max 0xfe)
+Text_drawSegment@0x00220db0          # their segment draw: style bytes +0xe..+0x15 to 0x139d50, Text_setPen(x, y, +0x18, +0), Text_drawString
+Text_setPen@0x002254d0               # their "set pen position": stores x/y/colour/style to 0x5a4a98/0x5a4aa0/0x41fc70/0x5a4a90 (or 0x2254a0 for a looked-up style)
+Text_drawString@0x00225290           # their glyph-draw dispatch: pen/colour to the font API, halves scale when the width flag is 0x40, calls Font_putText
+Text_measureLine@0x002229d0          # their line-length measurer: counts bytes to '\n'/NUL using Sjis_charState (1 or 2 per char)
+
+# Font
+Font_init@0x00139f60                 # their font init: LZ-decodes the font master (Lz_decodeRecord), uploads CLUT/images, allocates the 0x1e000 glyph cache, Font_copyGlyphsToCache
+Font_putText@0x0013a290              # their "innermost glyph blit": control codes 0x2e-0x3d (switch), SJIS banks 0x81-0x88, 0x8260-0x8279 checks, pen += 0x18, 0x13f glyph cap -> Font_flushGlyphs
+Font_flushGlyphs@0x0013aca0          # their flush: glyph structs -> GIF packets (0x380 reserve, outline flag +0x1c); called by Font_putText when full
+Font_copyGlyphsToCache@0x0013c5c0    # their glyph copy: 0x120-byte 24x24 4bpp glyphs into the cache (0x18 rows, 0x100 pitch, wrap at 0x1f7)
+Gs_buildLoadImagePacket@0x00136330   # their VRAM-upload helper: DMA tags + GIF A+D BITBLTBUF(0x50) TRXPOS(0x51) TRXREG(0x52) TRXDIR(0x53), then an image ref tag

@@ -1,0 +1,45 @@
+# Private: your own disc, BIOS and the emulator never go into git.
+/PCSX2/
+/bios/
+/disc/
+/local/
+/ghidra/
+/installers/
+*.lnk
+
+# Game or BIOS data in any form, wherever it lands.
+*.iso
+*.chd
+*.cue
+*.bin
+*.elf
+*.irx
+*.cso
+*.zso
+SLPS_*
+
+# Python
+__pycache__/
+*.pyc
+
+# Memory cards, captures and anything a run produces from the game (2026-10-07: the repo now has
+# a private GitHub backup; still nothing taken from the game goes up).
+/mc0/
+/mc1/
+*.ps2
+*.mcd
+*.p2s
+*.snap
+*.rgba
+*.dmp
+*.gs
+*.wav
+*.png
+*.jpg
+*.jpeg
+*.bmp
+gsdump_*
+# Generated C++ from the game (lives in local/, this is a second line of defence)
+ps2x_group_*.cpp
+register_functions.cpp
+ov_*.cpp
